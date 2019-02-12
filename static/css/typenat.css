@@ -1,11 +1,15 @@
 img[src$='#floatleft']
 {
 	float:left;
-        //etc. etc/
 }
 
 img[src$='#floatright']
 {
 	float:right;
-       //etc. etc.
 }
+
+
+.post .post-content .table-wrapper > table.bmk { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+.post .post-content .table-wrapper > table.bmk td, th { padding: 2px 5px; border: 1px solid #ddd; font-size: 12px; }
+.post .post-content .table-wrapper > table.bmk tr { background-color: #fff; border-top: 1px solid #ccc; font-size: 12px; }
+.post .post-content .table-wrapper > table.bmk tr:nth-child(even) { background: #f8f8f8; }
