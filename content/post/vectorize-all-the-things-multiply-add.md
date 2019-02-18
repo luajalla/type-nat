@@ -1,6 +1,7 @@
 ---
 title: "Vectorize All the Things: Multiply-Add"
 date: 2019-02-12
+lastmod: 2019-02-18
 tags: [ ".net core", performance, mkl, fsharp, vectors ]
 categories: [ performance ]
 ---
@@ -11,6 +12,11 @@ And now that I've completed my bacterial DNA counting adventures at ETHZ, it's t
 As someone who believes in [mechanical sympathy](https://mechanical-sympathy.blogspot.com/2011/07/why-mechanical-sympathy.html) 
 I'd like to share some of the experiments in vectorizing simple-yet-fundamental operations.
 And if you have some insights how to beat the benchmarks below, I'd gladly accept them and extend the list.
+
+{{% admonition type="info" %}}
+Update 2019-02-18. Correction: `vmulsd` is a scalar and not vectorized instruction. Thanks Mårten!
+{{% /admonition %}}
+
 
 After working for some time with not the most recent .NET Framework I couldn't wait to check out .NET Core and all performance goodies that come with it.
 For benchmarking I highly recommend [BenchmarkDotNet](https://benchmarkdotnet.org/index.html), it's an amazing tool that will take the best care of your benchmarking needs.
@@ -318,7 +324,7 @@ it's here for clarity reasons. The better solution is to use integers, but the f
 
 So is there a difference between `for` loops and vectorized code?
 
-- .NET `double` Vectors are approximately **2x faster** than `for`. But RyuJIT is actually quite smart and already uses vectorized operations:
+- .NET `double` Vectors are approximately **2x faster** than `for`. So what kind of instructions does RyuJIT use in the loops?
 
 {{< highlight asm >}}
 vmovaps xmm1,xmm0
@@ -327,7 +333,7 @@ vaddsd  xmm1,xmm1,mmword ptr [r8+r9*8+10h]
 vmovsd  qword ptr [r8+r9*8+10h],xmm1
 {{< /highlight >}}
 
-Compare to similar code that Legacy JIT would generate for this function (e.g. `addsd` instead of `vaddsd`):
+Compare to similar code that Legacy JIT would generate for this function (e.g. SSE instruction `addsd` vs AVX `vaddsd`):
 
 {{< highlight asm >}}
 movapd      xmm0,xmm1  
@@ -336,7 +342,7 @@ addsd       xmm0,mmword ptr [r8+r9+10h]
 movsd       mmword ptr [r8+r9+10h],xmm0  
 {{< /highlight >}}
 
-And more efficient version with vectors:
+And more efficient version with vectors (note `pd` in the names):
 
 {{< highlight asm >}}
 vbroadcastsd ymm0,xmm0
@@ -348,20 +354,17 @@ vmovupd ymmword ptr [rcx],ymm1
 {{< /highlight >}}
 
 - **MKL** has some overhead or similar results on smaller arrays but better performance (up to 12x in this test) on large ones.
-One of the reasons is that MKL optimizes multiply-add operations even further by using an appropriate FMA instruction `vfmadd213sd`.
+One of the reasons is that MKL optimizes multiply-add operations even further by using an appropriate FMA instruction `vfmadd213pd`.
 More information about Advanced Vector Extensions (AVX) is available [here](https://software.intel.com/en-us/articles/how-intel-avx2-improves-performance-on-server-applications).
 
 {{< highlight asm >}}
-vmovsd      xmm0,qword ptr [r8+FFFFFFFFFFFFFF00h]
-add         r8,r9
-vfmadd213sd xmm0,xmm7,mmword ptr [rsi+FFFFFFFFFFFFFF00h]
-vmovlpd     qword ptr [rsi+FFFFFFFFFFFFFF00h],xmm0
+vfmadd213pd ymm0,ymm7,ymmword ptr [rsi+FFFFFFFFFFFFFF00h]
 {{< /highlight >}}
 
 
 
 **Summing up**, the performance improvements in .NET Core and modern RyuJIT are quite impressive and for smaller arrays are even competitive as compared to native MKL libraries.
-Simple `for` loops are transformed into vectorized instructions, even though explicitly vectorized code is still significantly faster.
+Using vectorized instructions helps to make the code significantly faster.
 At the same time JIT doesn't perform all possible optimizations (yet?) as we've seen with a specialized case of `fma` operation,
 and one has to be very careful when multiplying vectors by a factor, because it makes quite a difference.
 
@@ -402,7 +405,4 @@ but also leverage mechanical sympathy. So let's start writing a bit more machine
 7. [BLAS routines](https://software.intel.com/en-us/mkl-developer-reference-c-blas-and-sparse-blas-routines)
 8. [Intel AVX2](https://software.intel.com/en-us/articles/how-intel-avx2-improves-performance-on-server-applications)
 9. [FMAs in CUDA C](https://docs.nvidia.com/cuda/floating-point/index.html#fused-multiply-add-fma)
-
-
-
 
